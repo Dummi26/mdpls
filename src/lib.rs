@@ -139,10 +139,45 @@ impl<'de> Deserialize<'de> for Settings {
     }
 }
 
-pub struct Serverr(pub aurelius::Server);
+pub struct Serverr(pub aurelius::Server, Option<String>);
 impl Serverr {
-    pub fn send(&mut self, markdown: String) -> io::Result<()> {
-        self.0.send(markdown.replace("\\neq", r#"\\char"2260"#))
+    pub fn send(&mut self, mut markdown: String) -> io::Result<()> {
+        if let Some(prev) = self.1.take() {
+            let edit_byte_pos = markdown
+                .chars()
+                .zip(prev.chars())
+                .take_while(|(c1, c2)| *c1 == *c2)
+                .map(|(c, _)| c.len_utf8())
+                .sum();
+            let header_pos = [
+                "\n# ",
+                "\n## ",
+                "\n### ",
+                "\n#### ",
+                "\n##### ",
+                "\n###### ",
+                "\n####### ",
+                "\n######## ",
+            ]
+            .iter()
+            .filter_map(|header_mark| markdown[0..edit_byte_pos].rfind(header_mark))
+            .map(|pos| pos + 1)
+            .max()
+            .map(|pos| pos.min(markdown.len()))
+            .unwrap_or(0);
+            const INJECTED: &str = r#"<span style="position:relative;"><img id="lastModifiedMarkerForMdplsToScrollTo" style="position:absolute;visibility:hidden;" src="/doesnotexist" onerror="window.requestAnimationFrame(() => { try { let scrollelem = document.getElementById('lastModifiedMarkerForMdplsToScrollTo'); scrollelem.scrollIntoView({ behavior: 'smooth' }); scrollelem.remove(); } catch (e) {} });" /></span>"#;
+            let new_markdown = format!(
+                "{}{INJECTED}\n\n{}",
+                &markdown[0..header_pos],
+                &markdown[header_pos..]
+            );
+            self.1 = Some(markdown);
+            markdown = new_markdown;
+        } else {
+            self.1 = Some(markdown.clone());
+        }
+        markdown = markdown.replace("\\neq", r#"\\char"2260"#);
+        self.0.send(markdown)
     }
 }
 
@@ -180,7 +215,7 @@ where
             transport: LspTransport::new(reader, writer),
             settings,
             shutdown: false,
-            markdown_server: Arc::new(Mutex::new(Serverr(server))),
+            markdown_server: Arc::new(Mutex::new(Serverr(server, None))),
             last_uri: None,
             test: false,
             defer_control: None,
