@@ -139,11 +139,18 @@ impl<'de> Deserialize<'de> for Settings {
     }
 }
 
+pub struct Serverr(pub aurelius::Server);
+impl Serverr {
+    pub fn send(&mut self, markdown: String) -> io::Result<()> {
+        self.0.send(markdown.replace("\\neq", r#"\\char"2260"#))
+    }
+}
+
 pub struct Server<R, W> {
     transport: LspTransport<R, W>,
     settings: Settings,
     shutdown: bool,
-    markdown_server: Arc<Mutex<aurelius::Server>>,
+    markdown_server: Arc<Mutex<Serverr>>,
     defer_control: Option<(
         Arc<Mutex<Option<String>>>,
         std::sync::mpsc::Sender<DeferEvent>,
@@ -173,7 +180,7 @@ where
             transport: LspTransport::new(reader, writer),
             settings,
             shutdown: false,
-            markdown_server: Arc::new(Mutex::new(server)),
+            markdown_server: Arc::new(Mutex::new(Serverr(server))),
             last_uri: None,
             test: false,
             defer_control: None,
@@ -331,6 +338,7 @@ where
                     self.markdown_server
                         .lock()
                         .unwrap()
+                        .0
                         .set_highlight_theme(self.settings.theme.clone());
 
                     // There is currently no way to unset the static root wihout restarting the browser
@@ -338,6 +346,7 @@ where
                         self.markdown_server
                             .lock()
                             .unwrap()
+                            .0
                             .set_static_root(std::env::current_dir().unwrap())
                     }
 
@@ -347,6 +356,7 @@ where
                         self.markdown_server
                             .lock()
                             .unwrap()
+                            .0
                             .set_external_renderer(command)
                     }
                 }
@@ -362,7 +372,11 @@ where
                     if self.is_new_uri(&params.text_document.uri) {
                         let tfp = params.text_document.uri.to_file_path();
                         if let Some(parent) = tfp.as_ref().ok().and_then(|p| p.parent()) {
-                            self.markdown_server.lock().unwrap().set_static_root(parent);
+                            self.markdown_server
+                                .lock()
+                                .unwrap()
+                                .0
+                                .set_static_root(parent);
                         }
                     }
                 }
@@ -390,7 +404,11 @@ where
                     if self.is_new_uri(&params.text_document.uri) {
                         let tfp = params.text_document.uri.to_file_path();
                         if let Some(parent) = tfp.as_ref().ok().and_then(|p| p.parent()) {
-                            self.markdown_server.lock().unwrap().set_static_root(parent);
+                            self.markdown_server
+                                .lock()
+                                .unwrap()
+                                .0
+                                .set_static_root(parent);
                         }
                     }
                 }
@@ -414,9 +432,10 @@ where
             self.markdown_server
                 .lock()
                 .unwrap()
+                .0
                 .open_specific_browser(command)
         } else {
-            self.markdown_server.lock().unwrap().open_browser()
+            self.markdown_server.lock().unwrap().0.open_browser()
         }
     }
 
