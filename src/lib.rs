@@ -143,13 +143,17 @@ pub struct Serverr(pub aurelius::Server, Option<String>);
 impl Serverr {
     pub fn send(&mut self, mut markdown: String) -> io::Result<()> {
         if let Some(prev) = self.1.take() {
+            let mut edit_byte_pos_char = ' ';
             let edit_byte_pos = markdown
                 .chars()
                 .zip(prev.chars())
                 .take_while(|(c1, c2)| *c1 == *c2)
-                .map(|(c, _)| c.len_utf8())
+                .map(|(c, _)| {
+                    edit_byte_pos_char = c;
+                    c.len_utf8()
+                })
                 .sum();
-            let header_pos = [
+            const HEADERS: [&str; 8] = [
                 "\n# ",
                 "\n## ",
                 "\n### ",
@@ -158,18 +162,32 @@ impl Serverr {
                 "\n###### ",
                 "\n####### ",
                 "\n######## ",
-            ]
-            .iter()
-            .filter_map(|header_mark| markdown[0..edit_byte_pos].rfind(header_mark))
-            .map(|pos| pos + 1)
-            .max()
-            .map(|pos| pos.min(markdown.len()))
-            .unwrap_or(0);
-            const INJECTED: &str = r#"<span style="position:relative;"><img id="lastModifiedMarkerForMdplsToScrollTo" style="position:absolute;visibility:hidden;" src="/doesnotexist" onerror="window.requestAnimationFrame(() => { try { let scrollelem = document.getElementById('lastModifiedMarkerForMdplsToScrollTo'); scrollelem.scrollIntoView({ behavior: 'smooth' }); scrollelem.remove(); } catch (e) {} });" /></span>"#;
+            ];
+            let header_pos = HEADERS
+                .iter()
+                .filter_map(|header_mark| markdown[0..edit_byte_pos].rfind(header_mark))
+                .map(|pos| pos + 1)
+                .max()
+                .map(|pos| pos.min(markdown.len()))
+                .unwrap_or(0);
+            let next_header_pos = HEADERS
+                .iter()
+                .filter_map(|header_mark| {
+                    markdown[edit_byte_pos.saturating_sub(edit_byte_pos_char.len_utf8())..]
+                        .find(header_mark)
+                })
+                .map(|pos| edit_byte_pos.saturating_sub(edit_byte_pos_char.len_utf8()) + pos + 1)
+                .min()
+                .map(|pos| pos.min(markdown.len()))
+                .unwrap_or(markdown.len());
+            const INJECTED: &str = r#"<span id="lastModifiedMarkerForMdplsToScrollTo" style="position:relative;top:-45vh;"><img style="position:absolute;visibility:hidden;width:50vw;height:90vh;" src="/doesnotexist" onerror="window.requestAnimationFrame(() => { try { let scrollelem = document.getElementById('lastModifiedMarkerForMdplsToScrollTo'); scrollelem.scrollIntoView({ behavior: 'smooth' }); scrollelem.remove(); let highlightelem = document.getElementById('lastModifiedMarkerForMdplsToHighlight'); setTimeout(() => { highlightelem.style['border-left-color'] = 'transparent'; }, 1000); setTimeout(() => { highlightelem.remove(); }, 3100); } catch (e) { console.log(e); } });" /></span>"#;
+            const INJECTED2: &str = r#"<div style="position:relative;"><div id="lastModifiedMarkerForMdplsToHighlight" style="pointer-events:none;position:absolute;left:-1em;right:0px;top:0px;bottom:0px;border-left-style:solid;border-left-color:#FFFA;transition:border-left-color ease-in-out 2s;"></div>"#;
+            const INJECTED3: &str = r#"</div>"#;
             let new_markdown = format!(
-                "{}{INJECTED}\n\n{}",
+                "{}\n{INJECTED}\n{INJECTED2}\n\n{}\n{INJECTED3}\n\n{}",
                 &markdown[0..header_pos],
-                &markdown[header_pos..]
+                &markdown[header_pos..next_header_pos],
+                &markdown[next_header_pos..],
             );
             self.1 = Some(markdown);
             markdown = new_markdown;
