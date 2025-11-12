@@ -183,8 +183,9 @@ impl Serverr {
             const INJECTED: &str = r#"<span id="lastModifiedMarkerForMdplsToScrollTo" style="position:relative;"><img style="position:absolute;visibility:hidden;width:50vw;height:50vh;" src="/doesnotexist" onerror="window.requestAnimationFrame(() => { try { let scrollelem = document.getElementById('lastModifiedMarkerForMdplsToScrollTo'); scrollelem.firstChild.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); scrollelem.remove(); let highlightelem = document.getElementById('lastModifiedMarkerForMdplsToHighlight'); setTimeout(() => { highlightelem.style['border-left-color'] = 'transparent'; }, 1000); setTimeout(() => { highlightelem.remove(); }, 3100); } catch (e) { console.log(e); } });" /></span>"#;
             const INJECTED2: &str = r#"<div style="position:relative;"><div id="lastModifiedMarkerForMdplsToHighlight" style="pointer-events:none;position:absolute;left:-1em;right:0px;top:0px;bottom:0px;border-left-style:solid;border-left-color:#FFFA;transition:border-left-color ease-in-out 2s;"></div>"#;
             const INJECTED3: &str = r#"</div>"#;
+            const INJECTED4: &str = r#"<div style="height:50vh;"></div>"#;
             let new_markdown = format!(
-                "{}\n{INJECTED}\n{INJECTED2}\n\n{}\n{INJECTED3}\n\n{}",
+                "{}\n{INJECTED}\n{INJECTED2}\n\n{}\n{INJECTED3}\n\n{}\n\n{INJECTED4}",
                 &markdown[0..header_pos],
                 &markdown[header_pos..next_header_pos],
                 &markdown[next_header_pos..],
